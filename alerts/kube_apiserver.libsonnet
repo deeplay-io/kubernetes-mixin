@@ -18,13 +18,15 @@ local utils = import '../lib/utils.libsonnet';
           {
             alert: 'KubeAPIErrorBudgetBurn',
             expr: |||
-              sum by (%(clusterLabel)s) (apiserver_request:burnrate%s) > (%.2f * %.5f)
+              sum by(%(clusterLabel)s) (apiserver_request:burnrate%s) > (%.2f * %.5f)
               and
-              sum by (%(clusterLabel)s) (apiserver_request:burnrate%s) > (%.2f * %.5f)
+              sum by(%(clusterLabel)s) (apiserver_request:burnrate%s) > (%.2f * %.5f)
             ||| % [
+              $._config.clusterLabel,
               w.long,
               w.factor,
               (1 - $._config.SLOs.apiserver.target),
+              $._config.clusterLabel,
               w.short,
               w.factor,
               (1 - $._config.SLOs.apiserver.target),
