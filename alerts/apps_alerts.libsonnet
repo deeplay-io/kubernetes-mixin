@@ -31,11 +31,11 @@
             // label exists for 2 values. This avoids "many-to-many matching
             // not allowed" errors when joining with kube_pod_status_phase.
             expr: |||
-              sum by (namespace, pod) (
-                max by(namespace, pod) (
+              sum by (%(clusterLabel)s, namespace, pod) (
+                max by(%(clusterLabel)s, namespace, pod) (
                   kube_pod_status_phase{%(prefixedNamespaceSelector)s%(kubeStateMetricsSelector)s, phase=~"Pending|Unknown"}
-                ) * on(namespace, pod) group_left(owner_kind) topk by(namespace, pod) (
-                  1, max by(namespace, pod, owner_kind) (kube_pod_owner{owner_kind!="Job"})
+                ) * on(%(clusterLabel)s, namespace, pod) group_left(owner_kind) topk by(%(clusterLabel)s, namespace, pod) (
+                  1, max by(%(clusterLabel)s, namespace, pod, owner_kind) (kube_pod_owner{owner_kind!="Job"})
                 )
               ) > 0
             ||| % $._config,
@@ -104,7 +104,7 @@
             },
             annotations: {
               description: 'StatefulSet {{ $labels.namespace }}/{{ $labels.statefulset }} has not matched the expected number of replicas for longer than 15 minutes.',
-              summary: 'Deployment has not matched the expected number of replicas.',
+              summary: 'StatefulSet has not matched the expected number of replicas.',
             },
             'for': '15m',
             alert: 'KubeStatefulSetReplicasMismatch',
@@ -193,7 +193,7 @@
           },
           {
             expr: |||
-              sum by (namespace, pod, container) (kube_pod_container_status_waiting_reason{%(prefixedNamespaceSelector)s%(kubeStateMetricsSelector)s}) > 0
+              sum by (%(clusterLabel)s, namespace, pod, container) (kube_pod_container_status_waiting_reason{%(prefixedNamespaceSelector)s%(kubeStateMetricsSelector)s}) > 0
             ||| % $._config,
             labels: {
               severity: 'warning',
@@ -238,7 +238,7 @@
           {
             alert: 'KubeJobNotCompleted',
             expr: |||
-              time() - max by(namespace, job_name) (kube_job_status_start_time{%(prefixedNamespaceSelector)s%(kubeStateMetricsSelector)s}
+              time() - max by(%(clusterLabel)s, namespace, job_name) (kube_job_status_start_time{%(prefixedNamespaceSelector)s%(kubeStateMetricsSelector)s}
                 and
               kube_job_status_active{%(prefixedNamespaceSelector)s%(kubeStateMetricsSelector)s} > 0) > %(kubeJobTimeoutDuration)s
             ||| % $._config,
