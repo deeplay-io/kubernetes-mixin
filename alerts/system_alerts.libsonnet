@@ -1,6 +1,7 @@
 {
   _config+:: {
     notKubeDnsCoreDnsSelector: 'job!~"kube-dns|coredns"',
+    kubeApiserverSelector: 'job="kube-apiserver"',
   },
 
   prometheusAlerts+:: {
@@ -11,7 +12,7 @@
           {
             alert: 'KubeVersionMismatch',
             expr: |||
-              count(count by (git_version) (label_replace(kubernetes_build_info{%(notKubeDnsCoreDnsSelector)s},"git_version","$1","git_version","(v[0-9]*.[0-9]*).*"))) > 1
+              count by (%(clusterLabel)s) (count by (git_version, %(clusterLabel)s) (label_replace(kubernetes_build_info{%(notKubeDnsCoreDnsSelector)s},"git_version","$1","git_version","(v[0-9]*.[0-9]*).*"))) > 1
             ||| % $._config,
             'for': '15m',
             labels: {
@@ -28,9 +29,9 @@
             // this is normal and an expected error, therefore it should be
             // ignored in this alert.
             expr: |||
-              (sum(rate(rest_client_requests_total{code=~"5.."}[5m])) by (%(clusterLabel)s, instance, job, namespace)
+              (sum(rate(rest_client_requests_total{%(kubeApiserverSelector)s,code=~"5.."}[5m])) by (%(clusterLabel)s, instance, job, namespace)
                 /
-              sum(rate(rest_client_requests_total[5m])) by (%(clusterLabel)s, instance, job, namespace))
+              sum(rate(rest_client_requests_total{%(kubeApiserverSelector)s}[5m])) by (%(clusterLabel)s, instance, job, namespace))
               > 0.01
             ||| % $._config,
             'for': '15m',

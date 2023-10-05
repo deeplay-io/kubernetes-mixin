@@ -27,15 +27,15 @@
           },
           {
             // We wrap kube_pod_owner with the topk() aggregator to ensure that
-            // every (namespace, pod) tuple is unique even if the "owner_kind"
+            // every (namespace, pod, %(clusterLabel)s) tuple is unique even if the "owner_kind"
             // label exists for 2 values. This avoids "many-to-many matching
             // not allowed" errors when joining with kube_pod_status_phase.
             expr: |||
-              sum by (%(clusterLabel)s, namespace, pod) (
-                max by(%(clusterLabel)s, namespace, pod) (
-                  kube_pod_status_phase{%(prefixedNamespaceSelector)s%(kubeStateMetricsSelector)s, phase=~"Pending|Unknown"}
-                ) * on(%(clusterLabel)s, namespace, pod) group_left(owner_kind) topk by(%(clusterLabel)s, namespace, pod) (
-                  1, max by(%(clusterLabel)s, namespace, pod, owner_kind) (kube_pod_owner{owner_kind!="Job"})
+              sum by (namespace, pod, %(clusterLabel)s) (
+                max by(namespace, pod, %(clusterLabel)s) (
+                  kube_pod_status_phase{%(prefixedNamespaceSelector)s%(kubeStateMetricsSelector)s, phase=~"Pending|Unknown|Failed"}
+                ) * on(namespace, pod, %(clusterLabel)s) group_left(owner_kind) topk by(namespace, pod, %(clusterLabel)s) (
+                  1, max by(namespace, pod, owner_kind, %(clusterLabel)s) (kube_pod_owner{owner_kind!="Job"})
                 )
               ) > 0
             ||| % $._config,
@@ -86,6 +86,21 @@
             },
             'for': '15m',
             alert: 'KubeDeploymentReplicasMismatch',
+          },
+          {
+            expr: |||
+              kube_deployment_status_condition{condition="Progressing", status="false",%(prefixedNamespaceSelector)s%(kubeStateMetricsSelector)s}
+              != 0
+            ||| % $._config,
+            labels: {
+              severity: 'warning',
+            },
+            annotations: {
+              description: 'Rollout of deployment {{ $labels.namespace }}/{{ $labels.deployment }} is not progressing for longer than 15 minutes.',
+              summary: 'Deployment rollout is not progressing.',
+            },
+            'for': '15m',
+            alert: 'KubeDeploymentRolloutStuck',
           },
           {
             expr: |||
@@ -193,7 +208,7 @@
           },
           {
             expr: |||
-              sum by (%(clusterLabel)s, namespace, pod, container) (kube_pod_container_status_waiting_reason{%(prefixedNamespaceSelector)s%(kubeStateMetricsSelector)s}) > 0
+              sum by (namespace, pod, container, %(clusterLabel)s) (kube_pod_container_status_waiting_reason{%(prefixedNamespaceSelector)s%(kubeStateMetricsSelector)s}) > 0
             ||| % $._config,
             labels: {
               severity: 'warning',
@@ -238,7 +253,7 @@
           {
             alert: 'KubeJobNotCompleted',
             expr: |||
-              time() - max by(%(clusterLabel)s, namespace, job_name) (kube_job_status_start_time{%(prefixedNamespaceSelector)s%(kubeStateMetricsSelector)s}
+              time() - max by(namespace, job_name, %(clusterLabel)s) (kube_job_status_start_time{%(prefixedNamespaceSelector)s%(kubeStateMetricsSelector)s}
                 and
               kube_job_status_active{%(prefixedNamespaceSelector)s%(kubeStateMetricsSelector)s} > 0) > %(kubeJobTimeoutDuration)s
             ||| % $._config,
@@ -285,7 +300,7 @@
             },
             annotations: {
               description: 'HPA {{ $labels.namespace }}/{{ $labels.horizontalpodautoscaler  }} has not matched the desired number of replicas for longer than 15 minutes.',
-              summary: 'HPA has not matched descired number of replicas.',
+              summary: 'HPA has not matched desired number of replicas.',
             },
             'for': '15m',
             alert: 'KubeHpaReplicasMismatch',
